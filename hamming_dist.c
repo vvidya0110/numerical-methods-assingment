@@ -1,153 +1,55 @@
-//finding the hamming distance in a array of 0's and 1's 
-
+//haming distance
 #include <stdio.h>
 #include <stdlib.h>
-#include <time.h>
 #include <string.h>
-#include <math.h>
 
-// -------------------------------
-// GET BIT
-// -------------------------------
-int get_bit(const unsigned char *arr, int bit_index) {
-    int byte = bit_index / 8;
-    int bit  = bit_index % 8;
-    return (arr[byte] >> (7 - bit)) & 1;
-}
-
-// -------------------------------
-// SET BIT
-// -------------------------------
-void set_bit(unsigned char *arr, int bit_index, int value) {
-    int byte = bit_index / 8;
-    int bit  = bit_index % 8;
-    if (value)
-        arr[byte] |= (1 << (7 - bit));
-    else
-        arr[byte] &= ~(1 << (7 - bit));
-}
-
-// -------------------------------
-// FLIP BIT
-// -------------------------------
-void flip_bit(unsigned char *arr, int bit_index) {
-    int byte = bit_index / 8;
-    int bit  = bit_index % 8;
-    arr[byte] ^= (1 << (7 - bit));
-}
-
-// -------------------------------
-// GENERATE RANDOM BITSTREAM
-// -------------------------------
-void generate_random_bits(unsigned char *arr, int num_bits) {
-    int num_bytes = (num_bits + 7) / 8;
-    for (int i = 0; i < num_bytes; i++)
-        arr[i] = rand() & 0xFF;
-
-    // Clear extra bits at end
-    int extra = num_bytes * 8 - num_bits;
-    if (extra > 0) {
-        arr[num_bytes - 1] &= (0xFF << extra);
+// packs a string of '0'/'1' into bytes, MSB first; returns 0 if a bad character is found
+static int pack(const char *s, unsigned char *out) {
+    for (int i = 0; s[i]; i++) {
+        if (s[i] != '0' && s[i] != '1') return 0;
+        if (s[i] == '1') out[i / 8] |= 1 << (7 - i % 8);
     }
+    return 1;
 }
 
-// -------------------------------
-// FLIP WITH PROBABILITY p
-// -------------------------------
-void flip_bits_with_probability(unsigned char *arr, int num_bits, double probability) {
-    for (int i = 0; i < num_bits; i++) {
-        double r = (double)rand() / RAND_MAX;
-        if (r < probability)
-            flip_bit(arr, i);
-    }
+static int get_bit(const unsigned char *a, int i) {
+    return (a[i / 8] >> (7 - i % 8)) & 1;
 }
 
-// -------------------------------
-// STRING → BIT ARRAY
-// -------------------------------
-void string_to_bits(const char *str, unsigned char *arr, int length) {
-    for (int i = 0; i < length; i++) {
-        set_bit(arr, i, str[i] == '1');
-    }
-}
-
-// -------------------------------
-// WRITE BITS TO FILE
-// -------------------------------
-void write_bits_to_file(const char *filename,
-                        const unsigned char *arr,
-                        int num_bits) {
-    FILE *fp = fopen(filename, "wb");
-    if (!fp) {
-        perror("File write error");
-        return;
-    }
-    int num_bytes = (num_bits + 7) / 8;
-    fwrite(arr, 1, num_bytes, fp);
-    fclose(fp);
-}
-
-// -------------------------------
-// READ BITS FROM FILE
-// -------------------------------
-void read_bits_from_file(const char *filename,
-                         unsigned char *arr,
-                         int num_bits) {
-    FILE *fp = fopen(filename, "rb");
-    if (!fp) {
-        perror("File read error");
-        return;
-    }
-    int num_bytes = (num_bits + 7) / 8;
-    fread(arr, 1, num_bytes, fp);
-    fclose(fp);
-}
-
-// -------------------------------
-// HAMMING DISTANCE
-// -------------------------------
-int hamming_distance(const unsigned char *bits1,
-                     const unsigned char *bits2,
-                     int num_bits)
-{
-    int dist = 0;
-    for (int i = 0; i < num_bits; i++) {
-        if (get_bit(bits1, i) != get_bit(bits2, i))
-            dist++;
-    }
-    return dist;
-}
-
-// -------------------------------
-// SLIDING WINDOW CODEWORD SEARCH
-// -------------------------------
-int find_codeword(const unsigned char *bitstream,
-                  int stream_length,
-                  const unsigned char *codeword,
-                  int codeword_length,
-                  HammingResult *results,
-                  int max_results)
-{
-    int num_windows = stream_length - codeword_length + 1;
-    if (num_windows <= 0) return 0;
-
-    int count = 0;
-
-    for (int start = 0; start < num_windows; start++) {
-
-        int hd = 0;
-        for (int k = 0; k < codeword_length; k++) {
-            if (get_bit(bitstream, start + k) != get_bit(codeword, k))
-                hd++;
-        }
-
-        if (count < max_results) {
-            results[count].location = start;
-            results[count].distance = hd;
-        }
-        count++;
+int main(int argc, char **argv) {
+    if (argc < 3 || argc > 4) {
+        fprintf(stderr, "Usage: %s <stream_bits> <codeword_bits> [max_distance]\n", argv[0]);
+        return 1;
     }
 
-    return (count < max_results ? count : max_results);
-}
+    int n = strlen(argv[1]), m = strlen(argv[2]);
+    int maxd = (argc == 4) ? atoi(argv[3]) : 0;
+    if (m == 0 || m > n) {
+        fprintf(stderr, "Codeword must be non-empty and not longer than the stream.\n");
+        return 1;
+    }
 
+    unsigned char *stream = calloc((n + 7) / 8, 1);
+    unsigned char *code   = calloc((m + 7) / 8, 1);
+    if (!stream || !code) { fprintf(stderr, "Memory allocation error.\n"); return 1; }
+    if (!pack(argv[1], stream) || !pack(argv[2], code)) {
+        fprintf(stderr, "Inputs must contain only 0 and 1.\n");
+        return 1;
+    }
+
+    printf("%-10s %s\n", "Location", "Hamming distance");
+    int best = m + 1, best_loc = -1, shown = 0;
+    for (int s = 0; s + m <= n; s++) {
+        int d = 0;
+        for (int k = 0; k < m; k++)
+            if (get_bit(stream, s + k) != get_bit(code, k)) d++;
+        if (d < best) { best = d; best_loc = s; }
+        if (d <= maxd) { printf("%-10d %d\n", s, d); shown++; }
+    }
+
+    if (shown == 0) printf("(no windows within distance %d)\n", maxd);
+    printf("\nBest match: location %d, distance %d\n", best_loc, best);
+
+    free(stream); free(code);
+    return 0;
+}
