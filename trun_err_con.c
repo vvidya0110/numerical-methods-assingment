@@ -9,37 +9,22 @@
 #include <stdlib.h>
 #define PI 3.14159265359 
 
-//calculating value of sin from taylor series
-double sine(double theta, int N){
-  double sum=0;
-  int co=-1;
-  for(int i=1; i<N*2;i=i+2){
-    double fact=1;
-    for(int j=1;j<i;j=j+1){
-      fact=fact*j;
+double mysine(int N, double x) {
+    double term = x, sum = 0;
+    for (int k = 0; k < N; k++) {
+        sum += term;
+        term *= -x * x / ((2*k + 2) * (2*k + 3));
     }
-    co=co*-1;
-    double value;
-    value=co*pow(theta,i);
-    sum=sum+(value/fact);
-  }
-  return sum;
+    return sum;
 }
 
-//cos value from taylor series
-double cosine(double theta, int N){
-  double sum=0;
-  int co=-1;
-  for(int i=0; i<N*2; i=i+2){
-    double fact=1;
-    for (int j=1;j<i;j=j+1){
-      fact=fact*j;
+double mycosine(int N, double x) {
+    double term = 1, sum = 0;
+    for (int k = 0; k < N; k++) {
+        sum += term;
+        term *= -x * x / ((2*k + 1) * (2*k + 2));
     }
-    co=co*-1;
-    double value=co*pow(theta,i);
-    sum=sum+(value/fact);
-  }
-  return sum;
+    return sum;
 }
 
 double main(int argc, char **argv){
